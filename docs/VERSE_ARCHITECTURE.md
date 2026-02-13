@@ -64,6 +64,11 @@ Map gene-level pseudobulk distributions into a **pathway/program space**:
 - Compute pathway scores and corresponding uncertainties from µ/σ.
 - Optionally include a **residual encoder** to capture novel programs not covered by known sets. [file:2]
 
+**Minimal v0 implementation note (recommended):**
+
+- Treat the program space as two channels: (1) curated gene-set programs for interpretability, plus (2) a residual/data-driven program channel (e.g., NMF on residualized pseudobulk) to capture biology not covered by curated sets.
+- When reporting condition effects, focus on within-cell-type/state shifts (Δprogram vectors and overall warp magnitude) rather than absolute pathway levels, since identity programs are expected to be stable within a cell type.
+
 **Output:**
 
 - For each Sample × CellType group:
@@ -91,6 +96,12 @@ Represent each **cell type/state** as a **probabilistic orbital** in program spa
 
 - Overlap between orbitals encodes transitional states.
 - Distance to orbital surface is used for novelty (inside vs outside at a given confidence). [file:2]
+
+**Novelty guardrails (recommended):**
+
+- Make novelty confidence-aware: propagate uncertainty from Layers 1–2 and down-weight low-n / low-confidence groups.
+- Only call “novel” states when profiles fall outside all orbitals at a stringent confidence threshold and replicate across donors (and ideally across cohorts).
+- Always run negative-control “technical warps” (batch/protocol as pseudo-conditions) to ensure novelty is not driven by technical structure.
 
 **Implementation:**
 
