@@ -113,6 +113,41 @@ iPSC microglia lack yolk-sac lineage developmental imprinting and differ metabol
 
 ## Roadmap After v0
 
-1. **v1**: Inactive lesion sub-orbital expansion; perivascular niche universe; sex-stratified warp analysis; OPC differentiation trajectory.
+1. **v1**: Inactive lesion sub-orbital expansion; perivascular niche universe; sex-stratified warp analysis; OPC differentiation trajectory. **Also v1**: Alsema et al. 2024 WM spatial data as a third independent spatial validation dataset (see "Datasets Evaluated and Deferred" below).
 2. **v2**: Transformer imprint space; geodesic trajectory modeling (pre/post treatment); non-linear warp fields.
-3. **v2+**: iPSC-microglia trajectory scoring as a drug-target validation tool; multi-omic fusion (ATAC + RNA).
+3. **v2+**: iPSC-microglia trajectory scoring as a drug-target validation tool; multi-omic fusion (ATAC + RNA). DARG orbital modeling if functional in vitro data matures (see below).
+
+---
+
+## Datasets Evaluated and Deferred
+
+The following datasets were explicitly considered and decided against for v0. Record of reasoning kept here to avoid re-litigating these decisions.
+
+### Alsema et al. 2024 (Nature Neuroscience) — Deferred to v1
+
+**What it is**: Spatial transcriptomics atlas of both **white matter and gray matter** MS lesions, post-mortem human brain. Re-analyzed (alongside Lerma-Martin 2024) by Park & Nicaise 2025 (Neuron). Covers >200 tissue sections from a large multi-site cohort.
+
+**Why not v0**:
+- Gray matter lesions are a fundamentally different biology (cortical layering, neuronal content, different cell-type composition, different lesion progression dynamics). Adding GM would require a separate universe ontology — cortical demyelination does not fit the NAWM→rim→core WM axis.
+- Training on combined WM + GM spatial data would contaminate WM orbitals: microglia homeostatic state in white matter ≠ microglia in cortex.
+- Three datasets already stress v0 scope. Adding a fourth adds harmonization cost without improving the core WM warp story.
+
+**Why v1**: The **white matter sections only** from Alsema 2024 could serve as a third independent spatial validation dataset (alongside Lerma-Martin), significantly strengthening LOSO spatial claims. Bookmark the GEO accession when confirmed and revisit for v1 spatial extension.
+
+**Action**: Find and record accession number. Do not download or integrate until v1 scope is confirmed.
+
+---
+
+### Park & Nicaise 2025 (Neuron, DOI: 10.1016/j.neuron.2025.09.022) — Not included
+
+**What it is**: Characterizes **DARGs (Disease-Associated Radial Glia-like Cells)** — a novel senescent, IRF1/IFN-driven glial population in progressive MS brain. Primary new data is **iNSC (induced neural stem cells)** from patient fibroblasts (snRNA-seq + snATAC-seq + proteomics). Spatial validation is done by re-analyzing Lerma-Martin 2024 and Alsema 2024 (datasets already evaluated above) — no new primary tissue spatial data is generated.
+
+**Why not included**:
+1. **iNSC data is in vitro** — same fundamental problem as iPSC microglia (see iPSC section above). Reprogrammed fibroblasts lack tissue-niche imprinting. They will show high novelty vs. tissue orbitals for non-biological reasons and cannot anchor orbital states.
+2. **DARGs are not in the current L2 orbital hierarchy** (radial glia-like cells are absent from the anchor table). Defining a reliable DARG orbital requires primary tissue data, not iNSC validation.
+3. **Senescence/SASP is a genuine new axis** but out of v0 scope. Adding senescence programs to the curated library would be meaningful — but this is scope creep that dilutes the rim/core factorized warp story being proven in v0.
+4. **No new spatial data** — the spatial validation in the paper reuses Lerma-Martin 2024, which is already in the plan.
+
+**One important operational note for spatial validation**: DARGs are enriched near lesion boundaries / active rim areas (confirmed in Lerma-Martin re-analysis). When running §I spatial validation, spots near the rim that receive `flag_novel = TRUE` may correspond to DARGs. **This is expected correct behavior**, not an artifact — the reference atlas predates DARG characterization. Document this in the novel-spot interpretation section of the warp report.
+
+**If v1/v2**: If a dedicated DARG tissue snRNA-seq dataset becomes available (not iNSC), adding a DARG L2 sub-orbital under a new "radial glia-like / senescent glia" L1 family would be meaningful, particularly combined with senolytic treatment response data.

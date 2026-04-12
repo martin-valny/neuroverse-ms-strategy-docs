@@ -187,6 +187,7 @@ This subsection applies only when spatial transcriptomics data is available.
 - [ ] Compute **Moran's I** for spatial autocorrelation of orbital membership scores. High Moran's I indicates spatially coherent orbital structure (expected for lesion niches).
 - [ ] For foamy/ABCA1-low microglia orbital: correlate orbital density with **distance to histological lesion rim boundary** (from iron staining / histological annotations if available). Foamy microglia density should peak near the rim.
 - [ ] For astrocyte scar orbital: density should peak in lesion core. Verify this directional prediction.
+- [ ] **Expected high-novelty spots at the rim**: Disease-Associated Radial Glia-like Cells (DARGs — Park & Nicaise, Neuron 2025) are enriched at lesion boundaries and were confirmed in Lerma-Martin re-analysis. Spots near the active rim with `flag_novel = TRUE` and no strong L2 orbital membership may correspond to DARGs. This is **expected correct model behavior** (reference atlas predates DARG characterization), not an artifact. Log the count and location of such spots in the spatial validation report; include a note in the warp report PDF explaining this expected novelty class.
 - [ ] Store spatial validation results in `reports/<run_id>/spatial_validation/`.
 
 ---
