@@ -52,11 +52,11 @@ Three complementary public datasets:
 
 Together these cover the full spatial × activity lesion design, enabling rigorous leave-one-dataset-out validation.
 
-**Key scientific findings the model should recover:**
-- Foamy (ABCA1/G1-low) microglia + CD8+ Trm T cell co-localization at the active rim
-- IFN-response programs peak at the active rim; lipid/sterol metabolism is disrupted
-- Scar-associated astrocytes dominate the core; remyelinating OL attempts are more prominent in inactive lesions
-- These warp signals are reproducible across datasets (structured overlap, not exact identity)
+**Literature-grounded hypotheses the model will test (falsifiable predictions):**
+- Foamy (ABCA1/G1-low) microglia + CD8+ Trm T cell co-localization at the active rim — predicted from GSE301908; confirmed or refuted by data-driven discovery
+- IFN-response and lipid/sterol metabolism programs expected among top warp drivers at the rim — confirmed or refuted by effect-size ranking
+- Spatial gradient structure across NAWM → rim → core expected per cell family — confirmed by Kruskal-Wallis test on discovered states (not by checking named states appear in specific locations)
+- Warp signals reproducible across datasets (structured overlap, not exact identity)
 
 ---
 
@@ -64,11 +64,11 @@ Together these cover the full spatial × activity lesion design, enabling rigoro
 
 **1. MS lesion orbital atlas** — reproduced from 3 public datasets; covers microglia, astrocytes, OL-lineage, OPC, T cells, neurons, endothelial.
 
-**2. Factorized warp report** — spatial axis + activity axis decomposed separately; top programs per axis per cell family (FDR-corrected); warp magnitude rankings.
+**2. Factorized warp report** — spatial axis + activity axis decomposed separately; top programs per axis per cell family ranked by effect size; warp magnitude and orbital scale change (expansion/compression) per family.
 
 **3. Universe classification** — for any new sample: U0/U1/U2 label + confidence tier (high/medium/low) + full posterior + novel flag.
 
-**4. Spatial validation** — orbital membership projected into tissue coordinates; foamy microglia density correlated with histological rim boundary distance.
+**4. Spatial validation** — orbital membership projected into tissue coordinates; per-state Moran's I and spatial gradient tests; rim-distance correlations for each discovered state reported as observations, post-hoc annotated against literature.
 
 ---
 
@@ -76,7 +76,7 @@ Together these cover the full spatial × activity lesion design, enabling rigoro
 
 | What | Target |
 |------|--------|
-| Leave-one-donor-out warp reproducibility (Spearman ρ) | ≥ 0.7 |
+| Leave-one-donor-out warp reproducibility (Spearman ρ) | ≥ 0.65 (aspirational; realistic range 0.50–0.65 with N≈20) |
 | Leave-one-dataset-out program overlap (Jaccard) | ≥ 0.5 |
 | Batch warp vs biological warp | < 50% |
 | Healthy reference cells inside orbitals | ≥ 80% |

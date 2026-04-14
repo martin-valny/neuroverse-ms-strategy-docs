@@ -51,9 +51,10 @@ Per sample/donor CSV with:
 Ambiguous samples (confidence_tier = low) are flagged — not silently assigned. The deliverable includes a dedicated section explaining why specific samples are ambiguous (incomplete metadata, biologically hybrid lesion stage, or insufficient cell counts).
 
 ### 2. Warp mechanism report (CSV + PDF)
-- Per cell family × warp axis (spatial, activity): warp magnitude, top-10 FDR-significant programs
+- Per cell family × warp axis (spatial, activity): warp magnitude, top-10 programs by effect size (|Δ_program|)
 - Batch constraint check results (confirms technical effects < 50% of biological effects)
 - Evaluation summary: LODO/LOSO metrics, anchoring check, neuron negative control
+- **Sparse family note**: T cell and endothelial warp analysis is best-effort; reported only if ≥ 5 donors meet the minimum cell count threshold per compartment
 
 ### 3. PDF report (10–20 slides)
 - Universe assignments with uncertainty
@@ -63,9 +64,11 @@ Ambiguous samples (confidence_tier = low) are flagged — not silently assigned.
 - Comparison vs public references (GSE180759, GSE301908, Lerma-Martin)
 
 ### 4. Reproducible pipeline
-- Containerized (Docker/conda) pipeline runnable via `make demo_ms`
+- Containerized (Docker/conda) pipeline. Two targets:
+  - `make demo_ms` — downsampled fast run (~30 min): 1,000 cells/donor, microglia only, no LOSO/spatial validation. Smoke test only.
+  - `make run_ms` — full production run (~12–48h): all families, all donors, full evaluation.
 - Documented with provenance for all public reference data
-- Partner data stays within partner's compute environment; only trained orbital parameters + report are delivered
+- **Partner data deployment model**: partner data stays within the partner's compute environment. Verse delivers: (a) the pre-trained reference orbital model (JSON + npz format), (b) the inference pipeline (Docker image), and (c) the final report. Partner runs inference locally on their data; only results (orbital membership, warp report, PDF) leave their environment. No raw or processed partner data is transferred to Verse systems.
 
 ## Partner Data Requirements
 
@@ -101,17 +104,30 @@ Samples with missing lesion activity staging are included in the **spatial axis 
 
 We **target** the following thresholds. If any target is not met, the final report includes a root-cause analysis explaining why (e.g., small sample size, missing activity labels, batch structure) and what would be needed to meet it in a follow-on engagement.
 
-| Criterion | Target |
-|-----------|--------|
-| Universe assignment agreement on 80% cell subsamples | ≥ 80% |
-| Top-10 warp program overlap (Jaccard) vs public reference | ≥ 0.5 |
-| Batch warp magnitude / biological warp magnitude | < 50% |
-| ≥ 1 literature-supported program per cell family per warp axis | Required |
-| Healthy-reference cell anchoring | ≥ 80% inside reference orbitals |
+| Criterion | Target | Notes |
+|-----------|--------|-------|
+| Universe assignment agreement on 80% cell subsamples | ≥ 80% | Stability check |
+| LODO warp direction (Spearman ρ, primary families) | ≥ 0.65 aspirational | Realistic with N≈20; report ρ distribution across folds |
+| Top-10 warp program overlap (Jaccard) vs public reference | ≥ 0.5 in ≥ 2 of 3 LOSO folds | Qualitative sanity check only — 3 folds cannot support generalization claims |
+| Batch warp magnitude / biological warp magnitude | < 50% | Hard constraint |
+| ≥ 1 discovered warp-driving program per cell family per warp axis can be mapped post-hoc to published CNS disease literature | Required | Documents that discovered biology is interpretable. Mapping is done **after** ranking programs by effect size — not used to select which programs to report. |
+| Healthy-reference cell anchoring | ≥ 80% inside reference orbitals | Per family |
 
 ## Intellectual Property & Data Confidentiality
 
 - Partner retains full ownership of all raw and processed data provided.
 - Verse retains IP over the generic Verse model architecture, code, and algorithms.
 - Trained orbital parameters derived from partner data are not shared, published, or incorporated into public reference atlases without explicit written consent from partner.
-- All partner data is processed within a secure environment; no data is uploaded to third-party services.
+- All partner data remains within the partner's compute environment (see Deliverable 4 above for partner data deployment model).
+
+## Known v0 Limitations
+
+The following limitations are acknowledged and documented in the final report:
+- **Donor non-independence**: pseudobulk groups from the same donor across spatial compartments are treated as independent in v0. Mixed-model correction (v1) will address within-donor correlation.
+- **σ_program not propagated**: novelty scoring uses orbital uncertainty only; gene-level uncertainty is not propagated through program scoring in v0.
+- **T cell / sparse family analysis**: best-effort only; most donors will not have sufficient T cells per compartment for robust warp analysis.
+- **LOSO reproducibility**: 3-dataset LOSO is a sanity check, not a statistical test of generalization.
+
+---
+
+*Version: v0.5 — last updated 2026-04-14. Key changes from v0.4: success criterion for literature-supported programs reframed as post-hoc mapping (done after effect-size ranking, not used to select programs).*

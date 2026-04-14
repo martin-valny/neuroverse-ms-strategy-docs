@@ -19,11 +19,13 @@
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │  LAYER 1: PROBABILISTIC PSEUDOBULK                                           │
 │                                                                              │
-│  Aggregate: Sample × CellFamily → (µ, σ, n, confidence)                    │
+│  Aggregate: Sample × CellFamily × SpatialLabel → (µ, σ, n, confidence)     │
 │                                                                              │
 │  • Uncertainty model: NB variance + DESeq2-style dispersion shrinkage       │
-│  • Hard filter: min_cells = 50   (below → MISSING flag, zero confidence)    │
+│  • Hard filter: min_cells=50 (default); T_cell/endothelial=20, neuron=30   │
 │  • Confidence: f(n, gene overdispersion r_gene)                             │
+│  • spatial_label: {healthy, NAWM, rim, core, unknown}  (spatial only)       │
+│  • activity_label: {healthy, chronic_active, chronic_inactive, unknown}     │
 └───────────────────────────────┬──────────────────────────────────────────────┘
                                 │
               ┌─────────────────┴─────────────────┐
@@ -31,26 +33,33 @@
               ▼                                   ▼
 ┌────────────────────────┐           ┌────────────────────────────┐
 │  CURATED PROGRAMS      │           │  RESIDUAL NMF PROGRAMS     │
-│  (~180 gene sets)      │           │  (data-driven novelty)     │
+│  (~195 gene sets)      │           │  (data-driven novelty)     │
 │                        │           │                            │
-│  • Reactome CNS  ~50   │           │  1. Regress genes on       │
-│  • Hallmarks     ~50   │           │     curated scores         │
-│  • GO:BP         ~30   │           │  2. Consensus NMF on       │
-│  • DoRothEA TFs  ~50   │           │     residuals (20× seeds)  │
-│                        │           │  3. K via cophenetic corr  │
-│  UCell / ssGSEA on     │           │     (≥0.95, K=5..20)       │
-│  pseudobulk µ          │           │  4. Top-50 genes/component │
+│  • Reactome CNS  ~50   │           │  1. Ridge regression on    │
+│  • Hallmarks     ~50   │           │     curated scores (OLS    │
+│  • GO:BP         ~30   │           │     replaced; n<2p→skip)   │
+│  • DoRothEA TFs  ~50   │           │     NOTE: guard fires for  │
+│  • PROGENy        14   │           │     all v0 datasets (n<390)│
+│    (perturbation-cal.) │           │  2. Consensus NMF on       │
+│                        │           │     residuals (20× seeds)  │
+│  UCell / ssGSEA on     │           │  3. K via cophenetic corr  │
+│  pseudobulk µ          │           │     (≥0.85–0.95, K=5..20) │
+│                        │           │  4. Top-50 genes/component │
 └──────────┬─────────────┘           └────────────┬───────────────┘
            │                                      │
            └──────────────┬───────────────────────┘
                           │
                           ▼
-              ┌───────────────────────┐
-              │   Z-SCORE             │
-              │   per program,        │
-              │   across all          │
-              │   pseudobulk units    │
-              └───────────┬───────────┘
+              ┌───────────────────────────────────────────┐
+              │   Z-SCORE (two separate operations)       │
+              │                                           │
+              │  Global z-score (all families pooled)     │
+              │    → feeds Global PCA only                │
+              │                                           │
+              │  Per-family z-score (within each family)  │
+              │    → feeds Per-family PCA only            │
+              │  (do NOT mix these two)                   │
+              └───────────────────┬───────────────────────┘
                           │
               ┌───────────┴───────────────────────────────────────┐
               │                                                   │
@@ -70,31 +79,31 @@
 │  LAYER 3: ORBITAL LAYER (L1 / L2 HIERARCHY)                                 │
 │                                                                              │
 │  L1: Cell family identity orbitals (defined from healthy tissue)             │
-│  L2: Canonical state orbitals per family (warps operate here)                │
+│  L2: States discovered post-fitting (data-driven, not pre-defined)           │
 │                                                                              │
-│  Covariance: Σ = Λ Λᵀ + Ψ  (low-rank + diagonal)                           │
-│  Fallback:   Σ = diag(σ²)  (if < 3×n_components pseudobulk groups)         │
+│  Covariance: Σ = diag(σ²)  (v0; low-rank + diagonal is v1)                 │
 │                                                                              │
-│  ┌─ Microglia ───────────────────────────────────────────────────┐          │
-│  │  homeostatic │ DAM-like │ IFN-responsive │ foamy │ iron       │          │
+│  REFERENCE ORBITAL FITTING (healthy tissue only, data-driven):              │
+│    • Take all reference_flag=True pseudobulk groups per family              │
+│    • Check healthy data for substructure (gap stat / silhouette)            │
+│    • Fit K Gaussians if K≥2 clusters detected, else 1 Gaussian             │
+│    • That IS the reference orbital — no pre-labeling required               │
+│                                                                              │
+│  ┌─ Microglia ─ reference orbital (from healthy data) ──────────┐          │
+│  │  → disease states: data-driven discovery from warp vectors   │          │
+│  │    post-hoc annotation against state reference guide         │          │
 │  └───────────────────────────────────────────────────────────────┘          │
-│  ┌─ Astrocytes ──────────────────────────────────────────────────┐          │
-│  │  homeostatic │ A1/neuroinflammatory │ A2 │ pan-reactive │ scar│          │
+│  ┌─ Astrocytes ─ reference orbital (from healthy data) ─────────┐          │
+│  │  → disease states: data-driven discovery from warp vectors   │          │
+│  │    (reactive continuum; A1/A2 binary not used)               │          │
 │  └───────────────────────────────────────────────────────────────┘          │
-│  ┌─ OL-lineage ──────────────────────────────────────────────────┐          │
-│  │  myelinating │ pre-myelinating │ stress/injured               │          │
-│  └───────────────────────────────────────────────────────────────┘          │
-│  ┌─ OPC ─────────────────────────────────────────────────────────┐          │
-│  │  quiescent │ activated (PPARG+)                               │          │
-│  └───────────────────────────────────────────────────────────────┘          │
-│  ┌─ T cells ─────────────────────────────────────────────────────┐          │
-│  │  CD8+ Trm │ CD4+ Th17-like │ Treg                            │          │
-│  └───────────────────────────────────────────────────────────────┘          │
-│  ┌─ Neurons ─────────────────────────────────────────────────────┐          │
-│  │  baseline  ← NEGATIVE CONTROL (minimal warp expected)         │          │
+│  ┌─ OL-lineage / OPC / T cells / Endothelial / Neurons ─────────┐          │
+│  │  → reference orbital from healthy; disease states from data  │          │
+│  │  Neurons: baseline ← NEGATIVE CONTROL (minimal warp expected)│          │
 │  └───────────────────────────────────────────────────────────────┘          │
 │                                                                              │
-│  Outputs: membership probabilities + novelty score per pseudobulk group     │
+│  Outputs: orbital membership probabilities + novelty score                  │
+│           (novelty uses σ²_orbital only in v0; σ_program not propagated)   │
 │                                                                              │
 │  Novelty bands:                                                              │
 │    95–99% outside best orbital  →  "Extreme known state"                    │
@@ -116,20 +125,26 @@
 │                   └──────┬──────┘                                            │
 │                          │◄──── + ────►                                     │
 │                   ┌──────┴──────┐                                            │
-│                   │w_interaction│  spatial × activity (if ≥3 donors/cell)   │
+│                   │w_{ij}       │  per (spatial_i, activity_j) pair         │
+│                   │             │  = element-wise indicator product          │
+│                   │             │  (NOT a Kronecker product)                 │
 │                   └──────┬──────┘                                            │
 │                          │◄──── + ────►                                     │
 │                   ┌──────┴──────┐                                            │
 │                   │ w_dataset   │  technical covariate (not biological)      │
 │                   └─────────────┘                                            │
 │                                                                              │
-│  Collinearity check: if rank(design) ≈ 1 → collapse to probabilistic       │
-│                       lesion axis + document                                 │
+│  Collinearity: VIF > 10 for any axis → collapse to probabilistic lesion axis│
+│  (condition number > 30 = fast first check; VIF is definitive criterion)    │
 │                                                                              │
-│  L2 regularization: L = fit_error + λ‖w‖²    (λ by LODO cross-validation)  │
-│  Warp magnitude:     ‖Δ_PCA‖₂  per cell family per warp axis               │
-│  Back-projection:    Δ_program = W_family^T × Δ_PCA  (FDR-corrected)       │
-│  Batch constraint:   batch warp magnitude < 50% of biological warp          │
+│  L2 reg: L = fit_error + λ‖w‖²   (λ via nested CV: outer=LODO, inner=λ)   │
+│  Warp magnitude:   ‖Δ_PCA‖₂  per cell family per warp axis                 │
+│  Back-projection:  Δ_program = W_family^T × Δ_PCA                          │
+│                    → rank by |Δ_program| (effect size)                      │
+│                    (no BH FDR — effect sizes, not p-values)                 │
+│  Batch constraint: batch warp magnitude < 50% of biological warp            │
+│                                                                              │
+│  Post-fitting: cluster disease warp vectors → annotate states               │
 └───────────────────────────────┬──────────────────────────────────────────────┘
                                 │
                                 ▼
@@ -149,18 +164,20 @@
               │  v0 outputs                          │  v2+ (deferred)
               ▼                                      ▼
 ┌────────────────────────────┐         ┌────────────────────────────┐
-│  OUTPUTS (v0)              │         │  LAYERS 6–7 (v2+)          │
+│  OUTPUTS (v0)              │         │  v0.5 / v2+                │
 │                            │         │                            │
-│  • Universe scores         │         │  • Transformer over tokens │
-│    (U0/U1/U2 + posterior   │         │  • Patient "imprint"       │
-│     + confidence tier)     │         │  • Multi-task heads        │
-│  • Orbital membership      │         │  • Geodesic trajectories   │
-│  • Warp report             │         │  • Response prediction     │
-│    (top programs, FDR,     │         │                            │
-│     warp magnitude)        │         └────────────────────────────┘
-│  • Spatial validation      │
-│    (Moran's I, rim dist)   │
-│  • Evaluation metrics      │
+│  • Universe scores         │         │  v0.5: Sample Imprint      │
+│    (U0/U1/U2 + posterior   │         │  imprint(s) = [Δ_µglia |   │
+│     + confidence tier)     │         │   Δ_astro | Δ_OL | ...]    │
+│  • Orbital membership      │         │  → cluster for holistic    │
+│  • Warp report             │         │    ecosystem signature     │
+│    (top programs by        │         │  (no transformer needed)   │
+│     effect size,           │         │                            │
+│     warp magnitude)        │         │  v2+: Transformer imprint  │
+│  • Sample imprints (v0.5)  │         │  Geodesic trajectories     │
+│  • Spatial validation      │         │  Response prediction       │
+│    (Moran's I, rim dist)   │         │                            │
+│  • Evaluation metrics      │         └────────────────────────────┘
 │    (LODO, LOSO, batch)     │
 └────────────────────────────┘
 ```
@@ -225,11 +242,17 @@ Raw scRNA-seq (3 datasets)
        ↓ Harmony (cell-level batch correction)
 Cell type annotation (cell_family vocabulary)
        ↓ Pseudobulk aggregation (min_cells=50)
-Program scoring (curated + NMF) → Z-score → PCA
-       ↓ Per-family orbital fitting (healthy reference only)
-Warp fitting (factorized linear model: spatial + activity)
-       ↓ Back-projection → named programs → FDR
-Universe scores + orbital membership + warp report
+Program scoring (curated + NMF) → Z-score (global for global PCA;
+                                  per-family for per-family PCA) → PCA
+       ↓ Per-family orbital fitting (healthy reference only, data-driven)
+Warp fitting (factorized linear model: spatial + activity, nested CV)
+       ↓ Back-projection → rank by |Δ_program| effect size (no FDR)
+       ↓ Post-fitting disease state discovery (cluster warp vectors)
+Universe scores + orbital membership + warp report + sample imprints
        ↓ Evaluation (LODO, LOSO, batch check, spatial validation)
 Deliverable outputs (CSV + PDF + reproducible pipeline)
 ```
+
+---
+
+*Version: v0.6 — last updated 2026-04-14. Key changes from v0.5: orbital layer box updated — named disease states removed from microglia and astrocyte boxes; replaced with "data-driven discovery from warp vectors / post-hoc annotation against state reference guide."*

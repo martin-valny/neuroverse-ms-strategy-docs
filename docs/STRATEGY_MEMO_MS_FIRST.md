@@ -44,48 +44,54 @@ Verse operates across **all major cell families** present in white matter. Micro
 
 | Cell family | Spatial axis (rim vs core vs NAWM) | Activity axis (active vs inactive) |
 |-------------|-----------------------------------|------------------------------------|
-| **Microglia** | Foamy/ABCA1-low + IFN states peak at active rim; homeostatic in NAWM | Chronic-active: foamy + CD8 niche; Inactive: DAM-like, iron-accumulating |
-| **Astrocytes** | Pan-reactive and A1 (neuroinflammatory) at rim; scar-associated in core | Chronic-active: stronger A1 signature; Inactive: gradual scar transition |
+| **Microglia** | GSE301908: foamy/ABCA1-low + CD8 niche at active rim. GSE180759/Lerma-Martin: iron-accumulating microglia dominant at rim. Homeostatic in NAWM across all datasets. | Chronic-active: foamy + CD8 niche (GSE301908); Inactive: DAM-like, iron-accumulating (Absinta) |
+| **Astrocytes** | Pan-reactive and IFN-responsive at rim; scar-associated in core | Chronic-active: stronger IFN/pan-reactive signature; Inactive: gradual scar transition |
 | **OL-lineage** | Stress/injured OL increases rim→core; myelinating OL depleted in core | Inactive lesions show remyelinating OL attempts more than active |
 | **OPC** | Activated OPC (PPARG+, differentiation-impaired) at lesion rim | Chronic-active: OPC blocked from differentiating; Inactive: partial recovery |
 | **T cells** | CD8+ Trm concentrated at active rim (GSE301908 CD8 niche) | Chronic-active only; minimal in inactive |
-| **Neurons** | Axonal depletion in core; near-zero warp in WM = **negative control** | Should not shift with activity |
+| **Neurons** | Axonal depletion in core; near-zero warp in NAWM and rim = **negative control** (applies to these compartments only). Core surviving neurons may show stress signature (HSPA1A/ATF3 upregulation) — not a control failure. | Should not shift with activity in NAWM/rim |
 | **Endothelial** | Activated at rim; homeostatic in NAWM | Chronic-active: BBB disruption signals |
 
-## Microglia Sub-State Detail (Primary Readout)
+## Microglia State Annotation Reference (Post-Discovery Labels)
 
-Within the rim/active universe, microglia are heterogeneous. Define sub-orbitals:
+These sub-states are **post-hoc annotation labels** applied after data-driven discovery from warp vector clustering — not pre-defined initialization inputs. If a discovered cluster matches one of these states by marker genes, apply the label. If the data reveals different or additional states, those are the true findings.
 
-| Sub-state | Key markers | Expected location | Anchor |
-|-----------|------------|-------------------|--------|
-| Homeostatic | P2RY12, CX3CR1, TMEM119 | NAWM | Healthy reference |
-| DAM-like | TREM2, APOE, SPP1 | NAWM → rim transition | MS literature |
-| IFN-responsive | ISG15, MX1, IFIT1–3 | Active rim, perivascular | Absinta; Lerma-Martin |
+> **How to use**: consult this table only after cluster discovery is complete and clusters are independently characterized by their top marker genes. The "Literature-reported location" column records what published studies have observed — it is a reference for interpreting your findings, not a prediction that constrains them. If a discovered state with these markers appears at a different spatial location than literature reports, that is a finding worth documenting.
+
+| State label | Key markers | Literature-reported location | Anchor |
+|-----------|------------|------------------------------|--------|
+| Homeostatic | P2RY12, CX3CR1, TMEM119 | NAWM and healthy tissue | Healthy reference orbital |
+| DAM-like | TREM2, APOE, SPP1 | Described near lesion margins | MS literature |
+| IFN-responsive | ISG15, MX1, IFIT1–3 | Active rim, perivascular regions | Absinta; Lerma-Martin |
 | Foamy / ABCA1-G1-low | ABCA1↓, ABCG1↓, LIPA, CD68, PLIN2 | Active rim (lipid accumulation) | GSE301908 (Immunity 2025) |
 | Iron-accumulating | FTH1, FTLL1, SLC40A1 | Chronic active / inactive rim | MS literature; Absinta |
 
-The foamy/ABCA1-low state and its spatial co-localization with CD8+ Trm T cells (the "pathogenic inflammatory niche" in GSE301908) is the strongest mechanistic anchor for the chronic-active rim universe.
+The foamy/ABCA1-low state and its spatial co-localization with CD8+ Trm T cells (the "pathogenic inflammatory niche" in GSE301908) is the strongest mechanistic anchor for the chronic-active rim universe in that dataset. **Important**: in Absinta/GSE180759, iron-accumulating microglia are the dominant rim state — both patterns are valid biology from different datasets. Discovering these niches from data rather than asserting them is the scientific validation story, and which state dominates will depend on dataset composition.
+
+**NAWM biology note**: NAWM is modeled as "mild warp from healthy" based on Absinta et al. data (subtle IFN elevation, early microglia activation). However, not all studies agree on NAWM biology — some treat it as essentially normal. The v0 pipeline will empirically test this: if NAWM pseudobulk groups fall mostly inside the healthy orbital (≥70%), NAWM is closer to healthy than disease, and the "mild warp" framing is validated. If NAWM falls mostly outside the healthy orbital, NAWM should be treated as a true disease state, which shifts the warp interpretation (NAWM is no longer an intermediate — it is a disease endpoint of its own).
 
 ## Core Scientific Hypotheses (Testable with v0)
 
 1. **Spatial hypothesis**: Cell-type/state orbitals shift progressively from healthy → NAWM → rim → core, and this spatial warp is reproducible across donors and datasets.
 2. **Activity hypothesis**: Chronic-active and chronic-inactive lesions at the same spatial compartment have different orbital shifts (especially at the rim), driven by distinct programs (IFN + lipid in active; iron + scar in inactive).
 3. **Factorizability**: The spatial and activity warps are approximately orthogonal and can be separated in the design matrix, enabling independent interpretation.
-4. **Mechanism**: The top warp-driving programs at the rim are IFN-response and lipid/sterol metabolism; the top programs at the core are scar-associated gliosis and myelin loss. These should replicate across datasets.
+4. **Mechanism** *(falsifiable prediction)*: Based on prior MS literature, the top warp-driving programs at the rim are expected to include IFN-response and/or lipid/sterol metabolism pathways; the top programs at the core are expected to include scar-associated gliosis and myelin loss programs. This is a **falsifiable prediction, not a validation target** — if iron-metabolism, complement, or other programs dominate instead, that is the actual finding. Report top programs by effect size first; compare to this prediction post-hoc.
 
 ## v0 Outputs (Sellable Artifacts)
 
 - **Lesion state space**: reproducible MS orbital atlas (UMAP + program axes) with NAWM/rim/core universes for all major cell families.
 - **Warp mechanism report**: per cell family — which orbitals shift the most, which programs drive each shift (spatial axis + activity axis separately), warp magnitude rankings.
 - **Universe classification API/notebook**: input a new snRNA sample or pseudobulk → output: dominant universe (U0/U1/U2), confidence tier (high/medium/low), full posterior vector, novel flag.
-- **Spatial validation**: orbital membership projected into tissue coordinates (Lerma-Martin spatial data), confirming that foamy microglia orbital density peaks at the histological rim boundary.
+- **Spatial validation**: orbital membership projected into tissue coordinates (Lerma-Martin spatial data); per-state Moran's I and spatial gradient tests confirm that discovered states are spatially organized; rim-distance correlations for each discovered state are reported as observations.
 
 ## What We Defer in v0
 
-- Full transformer / patient imprint and geodesic trajectory analysis (requires richer longitudinal structure)
+- Full transformer / patient imprint and geodesic trajectory analysis (requires richer longitudinal structure) — **v2**
 - iPSC microglia as a query domain (exploratory only — see below)
 - Perivascular niche, remyelinating lesion, and grey matter lesion universes
 - Inactive lesion sub-orbital expansion (v1)
+
+**v0.5 addition — Sample Imprint (no transformer required)**: concatenate per-family warp vectors for each sample into a single imprint vector; cluster/embed these imprints to get holistic sample-level disease signatures capturing cross-cell-type ecosystem co-variation. This is significantly more powerful than per-family analysis alone and does not require the transformer. Positioned between v0 (per-family) and v2 (transformer). See `VERSE_ARCHITECTURE.md §13`.
 
 ## iPSC Microglia Roadmap (Exploratory, v1)
 
@@ -105,7 +111,7 @@ iPSC microglia lack yolk-sac lineage developmental imprinting and differ metabol
 ## Evaluation Suite (Non-Negotiable)
 
 1. **Leave-one-donor-out (LODO)**: learn orbitals + warps on N-1 donors, apply to held-out donor. Warp direction vectors (Spearman ρ ≥ 0.7) and key programs must persist. Evaluate per cell family.
-2. **Leave-one-dataset-out (LOSO)**: train on 2 datasets, test on the 3rd (rotate). Top-10 warp-driving programs must overlap (Jaccard ≥ 0.5). Goal: structured overlap, not exact identity.
+2. **Leave-one-dataset-out (LOSO)**: train on 2 datasets, test on the 3rd (rotate). Expected: top-10 warp-driving programs Jaccard ≥ 0.5 in ≥ 2 of 3 folds. **LOSO with 3 datasets is a qualitative sanity check, not a statistical test** — 3 folds cannot support generalization claims. Report all 3 Jaccard values individually.
 3. **Negative control warps**: treat `dataset_id/protocol` as a pseudo-condition; show that dataset warp magnitude < 50% of biological warp magnitude.
 4. **Anchoring check**: ≥ 80% of healthy-reference cells inside reference orbitals at 99% confidence, per family.
 5. **Neuron negative control**: neuron warp magnitude < 25% of microglia warp magnitude.
@@ -113,9 +119,10 @@ iPSC microglia lack yolk-sac lineage developmental imprinting and differ metabol
 
 ## Roadmap After v0
 
-1. **v1**: Inactive lesion sub-orbital expansion; perivascular niche universe; sex-stratified warp analysis; OPC differentiation trajectory. **Also v1**: Alsema et al. 2024 WM spatial data as a third independent spatial validation dataset (see "Datasets Evaluated and Deferred" below).
-2. **v2**: Transformer imprint space; geodesic trajectory modeling (pre/post treatment); non-linear warp fields.
-3. **v2+**: iPSC-microglia trajectory scoring as a drug-target validation tool; multi-omic fusion (ATAC + RNA). DARG orbital modeling if functional in vitro data matures (see below).
+1. **v0.5**: Sample imprint (concatenated warp vectors → holistic ecosystem signature); no transformer required.
+2. **v1**: Inactive lesion sub-orbital expansion; perivascular niche universe; sex-stratified warp analysis; OPC differentiation trajectory; donor random effects in warp fitting; σ_program propagation. **Also v1**: Alsema et al. 2024 WM spatial data as a third independent spatial validation dataset (see "Datasets Evaluated and Deferred" below).
+3. **v2**: Transformer imprint space; geodesic trajectory modeling (pre/post treatment); non-linear warp fields; bootstrap/permutation significance for warp programs.
+4. **v2+**: iPSC-microglia trajectory scoring as a drug-target validation tool; multi-omic fusion (ATAC + RNA). DARG orbital modeling if functional in vitro data matures (see below).
 
 ---
 
@@ -151,3 +158,7 @@ The following datasets were explicitly considered and decided against for v0. Re
 **One important operational note for spatial validation**: DARGs are enriched near lesion boundaries / active rim areas (confirmed in Lerma-Martin re-analysis). When running §I spatial validation, spots near the rim that receive `flag_novel = TRUE` may correspond to DARGs. **This is expected correct behavior**, not an artifact — the reference atlas predates DARG characterization. Document this in the novel-spot interpretation section of the warp report.
 
 **If v1/v2**: If a dedicated DARG tissue snRNA-seq dataset becomes available (not iNSC), adding a DARG L2 sub-orbital under a new "radial glia-like / senescent glia" L1 family would be meaningful, particularly combined with senolytic treatment response data.
+
+---
+
+*Version: v0.5 — last updated 2026-04-14. Key changes from v0.4: "Microglia Sub-State Detail" renamed to "Microglia State Annotation Reference (Post-Discovery Labels)"; "Expected location" column replaced with "Literature-reported location (reference only)" + usage constraint note; Core Scientific Hypothesis 4 reframed as falsifiable prediction not a validation target.*
