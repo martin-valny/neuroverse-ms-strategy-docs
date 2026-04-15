@@ -157,6 +157,84 @@ Output files:
 
 ---
 
+### Targeted Dataset Expansion (v1, gap-driven)
+
+Adding more datasets is only beneficial when it addresses a specific identified gap. Randomly adding more MS lesion datasets mostly adds rim/core samples where v0 already has adequate coverage, while increasing harmonization complexity. Three targeted additions address the actual v0 weak points:
+
+---
+
+#### Gap A: Healthy WM reference donors (orbital covariance stability)
+
+**Problem**: v0 fits reference orbitals from ~11–17 healthy pseudobulk groups per family. With n≈12, diagonal covariance estimates have ~18% CV — novelty scoring is noisy. The correct fix is more healthy reference donors, not regularization alone (covariance regularization is a v0 mitigation; this is the actual fix).
+
+**Candidate datasets**:
+
+| Dataset | Healthy donors (WM) | Protocol | Notes |
+|---------|---------------------|----------|-------|
+| **SEA-AD** (Seattle Alzheimer's Disease Brain Cell Atlas, Allen Institute) | ~60–80 cognitively normal donors with WM tissue | snRNA-seq (10x v3) | Large, well-curated, publicly available. WM sections available. These contribute `reference_flag=True` rows only — no MS-specific metadata needed. |
+| **Human Cell Atlas (HCA) Brain** | Variable; multiple contributors | snRNA-seq / snATAC-seq | Check WM coverage. May need pre-filtering for non-neurological donors. |
+
+**Integration cost**: LOW. Healthy donors don't require spatial lesion label harmonization. They only contribute to orbital fitting, not to warp analysis. Add `dataset_id = sea_ad` (or similar), `reference_flag = True`, `spatial_label = healthy`, `activity_label = healthy`. Harmony integration at cell level; no warp design matrix contribution.
+
+**Expected benefit**: doubling healthy n from ~12 to ~25 reduces variance estimate CV from ~18% to ~9% — meaningfully more stable orbital boundaries and more reliable novelty scoring.
+
+**Action for v1**: Download SEA-AD WM sections, harmonize cell-type labels, integrate as healthy reference donors. No warp model changes needed — only orbital fitting benefits.
+
+---
+
+#### Gap B: Chronic-inactive lesion coverage (activity-axis identification)
+
+**Problem**: chronic-inactive lesions are underrepresented in v0 datasets. GSE301908 is chronic-active only. If GSE180759 + Lerma-Martin provide only 5–8 chronic-inactive donors, the activity warp axis may be dropped by the axis viability check (<5 donors).
+
+**Candidate dataset**:
+
+| Dataset | Chronic-inactive donors | Notes |
+|---------|------------------------|-------|
+| **Alsema et al. 2024** (Nature Neuroscience) | Large multi-site cohort; both active and inactive staged | Already deferred to v1 in STRATEGY_MEMO. WM sections only (exclude GM sections to avoid contaminating WM orbitals). |
+
+**Integration cost**: MEDIUM. Requires spatial label harmonization and activity staging. Gray matter sections must be excluded — use only WM tissue sections.
+
+**Expected benefit**: improves activity-axis warp identification; strengthens LOSO (adds a 4th dataset for rotation); provides third independent spatial validation dataset.
+
+**Action for v1**: Find and record Alsema 2024 GEO accession (noted as TODO in STRATEGY_MEMO). Download WM-only sections. Harmonize spatial_label and activity_label. Add to training set; update LOSO to 4-fold rotation.
+
+---
+
+#### Gap C: Larger MS donor cohort (LODO power)
+
+**Problem**: with N≈20 total MS donors, each LODO fold trains on 19 donors. Warp estimates are noisy and LODO ρ CI is wide (±0.15–0.25). Mean ρ ≥ 0.65 cannot reliably be distinguished from ρ ≥ 0.50 with N=20.
+
+**Candidate dataset**:
+
+| Dataset | MS donors | Notes |
+|---------|-----------|-------|
+| **Macnair et al. 2023** (Cell) | ~100 MS donors; explicit WM spatial labels; genetically characterized cohort | Large, well-powered. Would bring total N from ~20 to ~80+ donors, dramatically improving LODO stability. Requires significant harmonization effort. |
+
+**Integration cost**: HIGH. Large dataset requires careful harmonization, QC, and validation before warp fitting. Adds harmonization complexity and compute time. Recommend adding AFTER Alsema 2024 is integrated and v1 evaluation confirmed.
+
+**Expected benefit**: LODO ρ CI narrows from ±0.25 to ±0.08 with N=80; ρ=0.65 vs ρ=0.50 become clearly distinguishable. Enables statistical claims rather than only directional evidence.
+
+**Action for v1/v2**: confirm data availability and access terms. Plan harmonization as a dedicated sub-project given scale (100 donors × 4 primary families × 3 spatial labels = ~1,200 pseudobulk groups, well above all guard thresholds).
+
+---
+
+**Summary: dataset expansion decision tree**
+
+```
+Is your orbital covariance noisy (anchoring check < 85%)?
+  → Add SEA-AD healthy donors first (low cost, high impact on novelty scoring)
+
+Is your activity axis dropped by viability check (<5 chronic-inactive donors)?
+  → Add Alsema 2024 WM sections (medium cost, directly fixes activity axis)
+
+Is LODO ρ below 0.50 consistently across primary families?
+  → Evaluate Macnair 2023 (high cost, only after simpler fixes are exhausted)
+
+Do not add datasets just because they exist.
+```
+
+---
+
 ## v2+ Additions
 
 ### Learnable [MISSING] Token for Absent Cell Families
@@ -290,4 +368,4 @@ When adding new planned features, add them to the appropriate version section he
 
 ---
 
-*Version: v0.5 — created 2026-04-13. Consolidates all v1/v2+ specs from: (a) v0 known limitations documented in VERSE_ARCHITECTURE.md and ENGINEERING_CHECKLIST_MS_FIRST.md; (b) 12-gap conceptual review against the original ImmuneVerse specification (σ_program delta method, [MISSING] token, Bhattacharyya overlap, orbital scaling warp, inter-orbital coupling, PROGENy, CNS signatures, warp interpolation, biomarker discovery interface, masked cell type prediction, contrastive learning objectives).*
+*Version: v0.6 — last updated 2026-04-14. Key changes from v0.5: Targeted Dataset Expansion subsection added to §v1 (Gap A: SEA-AD healthy WM donors; Gap B: Alsema 2024 chronic-inactive WM; Gap C: Macnair 2023 LODO power; decision tree). Prior v0.5 changes: consolidates all v1/v2+ specs from v0 known limitations and 12-gap conceptual review.*

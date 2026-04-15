@@ -184,6 +184,9 @@ For each cell family:
   - If no (single cluster): fit a single diagonal-covariance Gaussian.
 - [ ] **That is the reference orbital.** No pre-labeling of states required.
 - [ ] **Covariance model (v0)**: diagonal covariance Σ = diag(σ²). Low-rank + diagonal (Σ = Λ Λ^T + Ψ) is a v1 extension requiring more healthy donors.
+- [ ] **Covariance regularization**: after fitting diagonal covariance, apply floor:
+  `ε = 0.01 × median(σ²_j)`; set `σ²_j = max(σ²_j, ε)` for all j.
+  Log: value of ε, number of dimensions floored, per cell family. Include in `anchoring_check.csv`.
 - [ ] **Anchoring validation**: compute the fraction of healthy-reference pseudobulk groups inside reference orbitals at 99% confidence. Must be ≥ 80% per family before proceeding. If not met, inspect the healthy data clustering and adjust K.
 
 **Collinearity check (required here)**:
@@ -197,6 +200,8 @@ For each cell family:
   4. Report collapsed warp magnitude and top programs per lesion_stage increment.
   5. Do NOT attempt to re-introduce interaction terms after collapse — they cannot be identified if the main axes are already collinear.
   6. **Mechanistic impact note**: document in the warp report that collapse means "we can describe *how much* cell states change along the lesion gradient, but cannot separate *location-specific* from *activity-specific* drivers."
+
+- [ ] **Pre-fit axis viability check**: for each design matrix axis (spatial_label, activity_label, dataset_id), count DISTINCT DONORS contributing pseudobulk groups. If any axis has < 5 distinct donors: drop that axis, log WARNING with actual count in `collinearity_check.txt`. Do not fit ghost parameters. Expected: NAWM and chronic_inactive may be underpowered in v0 — document actual counts for each.
 
 ### G1b) Disease state discovery (post-warp-fitting step — see §H)
 After warp vectors are estimated (§H), cluster disease pseudobulk warp vectors per family, annotate clusters against the Expected Disease State Annotation Guide in `VERSE_ARCHITECTURE.md §5`. This is a post-fitting discovery step, not an input to orbital fitting.
@@ -227,6 +232,7 @@ After L2 state orbitals are fitted (or discovered post-fitting), verify they are
 
 ## H) Warp Fitting
 
+- [ ] **Confirm axis viability check (§G1) has been run** and all axes with < 5 distinct donors have been dropped before fitting. Warp fitting must only proceed with viable axes.
 - [ ] For each cell family separately, fit the factorized warp model in per-family PCA space:
   ```
   center_condition = center_healthy
@@ -291,6 +297,10 @@ This subsection applies only when spatial transcriptomics data is available.
   - Metric: Spearman ρ of warp direction vectors (Δ_PCA per condition) across folds.
   - **Target (primary families)**: mean ρ ≥ 0.65 per cell family (aspirational). With N ≈ 20 total donors, warp estimates are inherently noisy — mean ρ ≈ 0.50–0.65 is the realistic expected range. ρ ≥ 0.65 is a good outcome, not a minimum requirement.
   - **Power note**: with N=20, each LODO fold trains on 19 donors. For a 6-dimensional warp space, this is modestly powered but not underpowered. Heterogeneous donors (atypical warp direction) will produce low ρ for those specific folds — report the distribution of ρ across folds, not just the mean.
+  - [ ] **Report full ρ distribution across folds** (all N LODO folds, not just mean):
+    - Output histogram or box plot of per-fold Spearman ρ values in `lodo_results.csv` + figure.
+    - Flag any fold with ρ < 0 as a potential outlier donor — investigate that donor's metadata (atypical disease stage, sex outlier, low cell counts that pushed it below min_cells in multiple compartments).
+    - A mean ρ = 0.60 with tight distribution (SD < 0.15) is more trustworthy than mean ρ = 0.65 with 3 negative folds. Report both mean and SD in the warp report PDF.
   - If mean ρ < 0.50 for a primary family: log root cause — is the warp direction inconsistent across donors (biological heterogeneity), or is the warp signal too small to detect (effect size issue)?
 
 - [ ] **Leave-one-dataset-out (LOSO)**:
@@ -346,4 +356,4 @@ This subsection applies only when spatial transcriptomics data is available.
 
 ---
 
-*Version: v0.7 — last updated 2026-04-15. Key changes from v0.6: LOSO asymmetry note added (§J); r_gene storage specified (§C, §K) as v1 dependency; interaction DOF warning added (§H); cell-type cross-dataset mapping table added (§E); PCA elbow criterion formalized (§F4, kneedle algorithm); clustering algorithm specified (§G1b, k-means + gap statistic); partner validation protocol added to pipeline note.*
+*Version: v0.8 — last updated 2026-04-14. Key changes from v0.7: covariance regularization checkbox added (§G1); pre-fit axis viability check added (§G1 + §H reference); LODO ρ full distribution reporting added (§J, flag ρ < 0 folds, report SD). Prior v0.7 changes: LOSO asymmetry note (§J); r_gene storage (§C, §K); interaction DOF warning (§H); cell-type mapping table (§E); PCA elbow formalized (§F4); clustering algorithm (§G1b); partner validation protocol.*

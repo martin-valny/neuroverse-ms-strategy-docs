@@ -196,6 +196,19 @@ For v0, orbitals are modeled as **diagonal covariance Gaussians** per cell famil
 
 **Anchoring criterion**: ≥ 80% of healthy-reference pseudobulk groups must fall inside reference orbitals at 99% confidence. This is a validation check, not a fitting target.
 
+### Covariance regularization (small healthy n mitigation)
+With n=11–17 healthy reference pseudobulk groups, variance estimates for individual PCA dimensions are noisy (standard error ≈ 18% CV with n=12). Near-zero variance on low-variance PCA dimensions causes novelty score inflation — many disease pseudobulks fall "outside" the orbital not because they are novel but because the orbital boundary was estimated too tightly.
+
+Mitigate by regularizing the diagonal covariance:
+```
+Σ_reg = diag(max(σ²_j, ε))
+ε = 0.01 × median(σ²_j across all j)
+```
+
+This floors each variance at 1% of the median variance, preventing pathological near-zero variance on low-information PCA dimensions. Report the value of ε and how many dimensions were floored in `anchoring_check.csv` — transparency on how many dimensions were affected.
+
+This is a v0 mitigation for small healthy n; the correct v1 fix is more healthy reference donors (see `FUTURE_VERSIONS_ROADMAP.md §v1 Gap A`).
+
 ### Disease state discovery (post-fitting, data-driven)
 L2 disease states (DAM-like, IFN-responsive, foamy microglia, etc.) are **discovery outputs**, not initialization inputs. After warp estimation:
 
@@ -299,6 +312,22 @@ center_condition = center_healthy
 Fit w_interaction only if ≥ 3 donors exist per condition cell (each spatial × activity combination). Otherwise drop the interaction term and log all skipped cells.
 
 **Degrees of freedom note**: the full factorized model (intercept + 2 spatial + 1 activity + up to 6 interactions + 1 dataset + 2–3 covariates) has ~13–15 parameters. With N≈20 pseudobulk groups per family, this is on the edge of overfitting even with L2 regularization. In practice, the ≥3 donors rule will skip most interaction terms for v0 datasets, reducing the effective model to main effects only (spatial + activity + dataset + covariates, ~7–8 parameters). **Interaction analysis requires larger cohorts or partner data enrichment.**
+
+### Pre-fit axis viability check (required before warp fitting)
+With N≈20 donors total and non-uniform compartment coverage, some condition axes may be supported by fewer than 5 distinct donors. Fitting a warp parameter on <5 donors produces an unstable estimate even with L2 regularization — the parameter will be dominated by individual outlier donors.
+
+Before fitting, count distinct donors contributing pseudobulk groups for each design matrix axis:
+- `w_spatial` per spatial_label: how many distinct donors have this label?
+- `w_activity` per activity_label: how many distinct donors have this label?
+- `w_dataset` per dataset_id: how many distinct donors per dataset?
+
+**Rule**: if any axis has fewer than 5 distinct donors, DROP that axis from the model and log a WARNING with the actual count. Do not fit ghost parameters.
+
+Expected v0 outcomes:
+- NAWM axis: potentially only 8–12 donors (autopsy studies often focus on lesion core). If <5 donors, NAWM warp is unreliable — collapse spatial axis to rim vs core only.
+- Chronic-inactive: potentially only 5–8 donors (underrepresented vs chronic-active). If <5, drop activity axis — report spatial axis only and note the limitation.
+
+Document dropped axes in `collinearity_check.txt` alongside the VIF results.
 
 ### L2 regularization and nested cross-validation
 Warp fitting minimizes:
@@ -501,4 +530,4 @@ Stepping t from 0 → 1 visualizes the "path" between sample A's ecosystem state
 
 ---
 
-*Version: v0.7 — last updated 2026-04-15. Key changes from v0.5: "orthogonal" → "separable" warp framing (§1) with explicit note that VIF < 10 ≠ orthogonality; interaction DOF warning added to §6 (most interaction terms expected to be skipped in v0); annotation guide usage constraint added (§5, post-hoc only). Prior v0.5 changes: PROGENy (~195 total); σ_program delta method; Bhattacharyya overlap; scale_ratio; inter-orbital coupling (v2+); [MISSING] token; contrastive learning; biomarker discovery (v1+); warp interpolation (§13).*
+*Version: v0.8 — last updated 2026-04-14. Key changes from v0.7: covariance regularization subsection added (§5, Σ_reg = diag(max(σ²_j, ε)) formula); pre-fit axis viability check added (§6, drop axis if < 5 distinct donors). Prior v0.7 changes: "orthogonal" → "separable" warp framing (§1); interaction DOF warning (§6); annotation guide usage constraint (§5, post-hoc only). Prior v0.5 changes: PROGENy (~195 total); σ_program delta method; Bhattacharyya overlap; scale_ratio; inter-orbital coupling (v2+); [MISSING] token; contrastive learning; biomarker discovery (v1+); warp interpolation (§13).*
