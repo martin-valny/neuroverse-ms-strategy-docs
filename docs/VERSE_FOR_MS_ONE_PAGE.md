@@ -8,7 +8,7 @@
 
 Multiple sclerosis white matter lesions are **not one thing**. A lesion rim is biologically distinct from its core, and a chronic-active lesion is distinct from an inactive one. Standard single-cell RNA-seq analysis treats these as groupings to compare — but cannot:
 
-- **Factor** spatial position and inflammatory activity simultaneously as orthogonal axes
+- **Factor** spatial position and inflammatory activity simultaneously as separable axes
 - **Quantify** how each cell type's state shifts along each axis with calibrated uncertainty
 - **Score** any new sample into that factored state space without retraining
 - **Distinguish** genuine novel biology from technical noise at the right confidence level
@@ -35,7 +35,7 @@ Healthy tissue (fixed reference orbitals)
 | Feature | Standard analysis | Verse |
 |---------|------------------|-------|
 | Reference | Per-study baseline | Fixed healthy tissue anchor |
-| Condition model | One-at-a-time comparisons | Factorized orthogonal axes |
+| Condition model | One-at-a-time comparisons | Factorized separable axes |
 | Cell type scope | Usually one focus cell type | All major families simultaneously |
 | Uncertainty | Point estimates | Propagated NB variance + confidence weighting |
 | Novelty detection | Unsupervised clustering artifact | Calibrated χ² threshold + replication requirement |
@@ -99,3 +99,5 @@ Verse factors the spatial and inflammatory axes of MS lesion pathology into a un
 ---
 
 *Full technical specification: `VERSE_ARCHITECTURE.md` | MS strategy: `STRATEGY_MEMO_MS_FIRST.md` | Pilot terms: `PILOT_SOW_MS_FIRST.md`*
+
+*Version: v0.2 — last updated 2026-04-15. Key changes from v0.1: "orthogonal" → "separable"; "should recover" → falsifiable predictions; FDR → effect-size ranking; LODO target ≥0.65 aspirational; spatial validation updated to structure-only checks.*

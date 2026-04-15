@@ -13,7 +13,7 @@ This document maps every section of `VERSE_ARCHITECTURE.md` to the corresponding
 | **§3 Layer 1** — pseudobulk granularity (Sample×CellFamily×SpatialLabel) | Checklist §C | **v0 core** | Corrected from v0.3 (was Sample×CellFamily only — broke spatial resolution) |
 | **§3 Layer 1** — NB variance + DESeq2 shrinkage | Checklist §C | **v0 core** | NB dispersion fit per gene; MISSING flag |
 | **§3 Layer 1** — per-family min_cells thresholds | Checklist §C | **v0 core** | Default=50; T_cell/endothelial=20; neuron=30; T cell is best-effort tier |
-| **§4 Layer 2** — Curated program library (~180) | Checklist §F1 | **v0 core** | Reactome CNS + Hallmarks + GO:BP + DoRothEA |
+| **§4 Layer 2** — Curated program library (~195) | Checklist §F1 | **v0 core** | Reactome CNS + Hallmarks + GO:BP + DoRothEA + PROGENy |
 | **§4 Layer 2** — Residual NMF programs | Checklist §F2 | **v0 core** | Consensus NMF, cophenetic K, 20× seeds, top-50 genes per component |
 | **§4 Layer 2** — Residualization: ridge regression (not OLS) | Checklist §F2 | **v0 core** | OLS replaced with ridge; guard: skip if n_groups < 2×n_programs |
 | **§4 Layer 2** — Z-scoring: global vs per-family (two separate operations) | Checklist §F3 | **v0 core** | Global z-score → global PCA only; per-family z-score → per-family PCA only |
@@ -48,7 +48,7 @@ This document maps every section of `VERSE_ARCHITECTURE.md` to the corresponding
 | **§11 Batch: Harmony cell-level** | Checklist §D | **v0 core** | NOT on pseudobulk |
 | **§11 Batch: covariate at pseudobulk/warp level** | Checklist §D; §H | **v0 core** | dataset_id + protocol as fixed effects |
 | **§11 Composition confound check** | Checklist §C | **v0 core** | Permutation test per family |
-| **§12 Evaluation: LODO ρ ≥ 0.7 (nested CV)** | Checklist §J | **v0 core** | Primary families only; nested CV required |
+| **§12 Evaluation: LODO ρ ≥ 0.65 aspirational (nested CV)** | Checklist §J | **v0 core** | Primary families only; nested CV required; realistic range 0.50–0.65 with N≈20 |
 | **§12 Evaluation: LOSO Jaccard ≥ 0.5 (sanity check, not stat test)** | Checklist §J | **v0 core** | 3 folds → report all 3 individually; qualitative sanity check |
 | **§12 Evaluation: primary vs best-effort family tiers** | Checklist §J | **v0 core** | Primary: microglia/astrocyte/OL/OPC; best-effort: T_cell/endothelial/neuron |
 | **§12 Evaluation: batch < 50% biological** | Checklist §J | **v0 core** | |
@@ -129,12 +129,13 @@ The following architecture concepts have NO corresponding checklist item and are
 
 | File | Version | Last reviewed |
 |------|---------|---------------|
-| VERSE_ARCHITECTURE.md | v0.5 | 2026-04-13 |
-| ENGINEERING_CHECKLIST_MS_FIRST.md | v0.5 | 2026-04-13 |
-| FUTURE_VERSIONS_ROADMAP.md | v0.5 | 2026-04-13 (new) |
-| STRATEGY_MEMO_MS_FIRST.md | v0.4 | 2026-04-14 |
-| PILOT_SOW_MS_FIRST.md | v0.4 | 2026-04-14 |
-| VERSE_ARCHITECTURE_DIAGRAM.md | v0.4 | 2026-04-14 |
-| ARCHITECTURE_IMPLEMENTATION_MAP.md | v0.5 | 2026-04-13 |
+| VERSE_ARCHITECTURE.md | v0.7 | 2026-04-15 |
+| ENGINEERING_CHECKLIST_MS_FIRST.md | v0.7 | 2026-04-15 |
+| FUTURE_VERSIONS_ROADMAP.md | v0.5 | 2026-04-13 |
+| STRATEGY_MEMO_MS_FIRST.md | v0.6 | 2026-04-15 |
+| PILOT_SOW_MS_FIRST.md | v0.6 | 2026-04-15 |
+| VERSE_ARCHITECTURE_DIAGRAM.md | v0.6 | 2026-04-14 |
+| VERSE_FOR_MS_ONE_PAGE.md | v0.2 | 2026-04-15 |
+| ARCHITECTURE_IMPLEMENTATION_MAP.md | v0.7 | 2026-04-15 |
 
 When either `VERSE_ARCHITECTURE.md` or `ENGINEERING_CHECKLIST_MS_FIRST.md` is updated, review this map for new orphans or coverage gaps.

@@ -89,7 +89,7 @@ Every pseudobulk row must contain these columns:
   - neuron: 30 cells
 
   Groups below the threshold receive `MISSING` flag and zero confidence. Document removal rate per cell family per dataset. **T cell warp analysis is best-effort**: report only if ≥ 5 donors have ≥ 20 T cells per compartment; otherwise report cell counts and exclude from warp analysis.
-- [ ] Compute NB variance + DESeq2-style dispersion shrinkage per gene. Store per-gene overdispersion parameter `r_gene`. (Ref: `VERSE_ARCHITECTURE.md`, Layer 1.)
+- [ ] Compute NB variance + DESeq2-style dispersion shrinkage per gene. Store per-gene overdispersion parameter `r_gene` in `.uns["nb_dispersion"]` (per cell family). **v1 dependency**: σ_program propagation (delta method) requires `r_gene` — verify this artifact is present in v0 outputs before v1 development begins. (Ref: `VERSE_ARCHITECTURE.md`, Layer 1; `FUTURE_VERSIONS_ROADMAP.md` §v1.)
 - [ ] **Composition confound check**: for each cell family, run a permutation test of cell-type proportion (fraction of all cells) against `dataset_id`, `spatial_label`, and `activity_label`. Flag families where proportion is significantly predicted by `dataset_id` (p < 0.05, permutation). These families require careful interpretation in warp analysis.
 
 ---
@@ -106,6 +106,22 @@ Every pseudobulk row must contain these columns:
 ## E) Cell Type Annotation
 
 - [ ] Use dataset-provided labels where available (GSE180759, Lerma-Martin have published annotations).
+- [ ] **Cross-dataset label harmonization**: map each dataset's published cell-type annotations to the canonical `cell_family` vocabulary. Document the mapping explicitly:
+
+  | Dataset | Published label examples | → `cell_family` |
+  |---------|------------------------|-----------------|
+  | GSE180759 | Microglia, MG, Mic | microglia |
+  | GSE180759 | Astrocytes, Astro | astrocyte |
+  | GSE180759 | Oligodendrocytes, Oligo, MOL | OL_lineage |
+  | GSE180759 | OPC, COP | OPC |
+  | GSE180759 | Neurons, ExN, InN | neuron |
+  | GSE180759 | Endothelial, Endo | endothelial |
+  | GSE180759 | T cells, CD8, CD4 | T_cell |
+  | Lerma-Martin | (map published labels similarly) | ... |
+  | GSE301908 | (map published labels similarly) | ... |
+
+  **Note**: complete this table after downloading each dataset's published annotation vocabulary. Ambiguous labels (e.g., "myeloid" which could be microglia or macrophage) must be resolved using marker gene expression, not assumed.
+
 - [ ] For unlabeled or ambiguous cells: run conservative annotation against major classes using marker gene scoring (microglia, astrocyte, OL-lineage, OPC, neuron, endothelial, T cell, other).
 - [ ] Store `cell_family` using the stable vocabulary defined in Section 0.
 - [ ] Verify that Harmony-corrected UMAP shows expected anatomical/cell-family groupings.
@@ -150,7 +166,7 @@ Every pseudobulk row must contain these columns:
 
 ### F4) Two-level PCA
 - [ ] **Global PCA**: fit PCA on `.obsm["X_prog_global"]` (all cell families, globally z-scored), 20–30 components. Used for: cross-family UMAP, patient-level visualization, sanity checks.
-- [ ] **Per-family PCA**: for each cell family separately, fit PCA on that family's within-family z-scored program scores. Select number of components by elbow criterion (typically 10–20). These PCAs are used for orbital fitting and warp estimation.
+- [ ] **Per-family PCA**: for each cell family separately, fit PCA on that family's within-family z-scored program scores. Select number of components by **kneedle algorithm** (automatic knee/elbow detection) on the cumulative variance explained curve, with a floor of 10 and a cap of 20. If kneedle selects < 10 components, use 10; if > 20, cap at 20. As a fallback: use the smallest K that explains ≥ 90% cumulative variance. Document the chosen method and K per family in run metadata. These PCAs are used for orbital fitting and warp estimation.
 - [ ] Store per-family PCA models and loading matrices W_family for later back-projection.
 
 ---
@@ -184,6 +200,8 @@ For each cell family:
 
 ### G1b) Disease state discovery (post-warp-fitting step — see §H)
 After warp vectors are estimated (§H), cluster disease pseudobulk warp vectors per family, annotate clusters against the Expected Disease State Annotation Guide in `VERSE_ARCHITECTURE.md §5`. This is a post-fitting discovery step, not an input to orbital fitting.
+
+- [ ] **Clustering algorithm**: use **k-means** with K selected via **gap statistic** (Tibshirani et al. 2001). K range: 2–8 per cell family. If the gap statistic plateau is ambiguous, use silhouette score as a tiebreaker (choose K that maximizes mean silhouette). Alternative: hierarchical clustering (Ward linkage) with dendrogram cut at silhouette-maximizing K. Document algorithm choice and K per family in run metadata.
 
 ### G1c) Orbital overlap check (Bhattacharyya distance)
 After L2 state orbitals are fitted (or discovered post-fitting), verify they are sufficiently distinct:
@@ -220,7 +238,7 @@ After L2 state orbitals are fitted (or discovered post-fitting), verify they are
                     + w_disease_duration · X_disease_duration
   ```
   Note: the interaction term is an element-wise indicator product per (spatial_bin, activity_bin) pair — not a Kronecker product of the full design matrices.
-- [ ] **Interaction sparsity rule**: fit interaction terms only if ≥ 3 donors per (spatial, activity) combination. Log all skipped terms.
+- [ ] **Interaction sparsity rule**: fit interaction terms only if ≥ 3 donors per (spatial, activity) combination. Log all skipped terms. **Expected v0 outcome**: with N≈20 total and the ≥3 donors rule, most interaction terms will be skipped. v0 warp analysis will primarily capture main effects (spatial + activity); interaction analysis requires larger cohorts or partner data.
 - [ ] **L2 regularization + nested CV**: minimize reconstruction error + λ·||w||². Select λ using **nested cross-validation**:
   - Outer loop: LODO — hold out donor D for evaluation.
   - Inner loop: for each outer fold, select λ by CV on the N-2 remaining donors.
@@ -280,6 +298,7 @@ This subsection applies only when spatial transcriptomics data is available.
   - Metric: Jaccard similarity of top-10 warp-driving programs across train/test.
   - **Expected (primary families)**: Jaccard ≥ 0.5 in ≥ 2 of 3 folds.
   - **Important**: LOSO produces 3 fold values — this is a **qualitative sanity check**, not a statistical test. Report all 3 fold Jaccard values individually. Do not collapse to a single pass/fail. Do not make generalization claims based on 3 folds.
+  - **LOSO asymmetry**: GSE301908 contains only chronic-active lesions (no variance on the activity axis). When GSE301908 is the held-out fold, LOSO validates spatial-axis warp only — activity-axis programs cannot be tested in that fold. Annotate each fold's results with which warp axes were testable.
 
 - [ ] **Batch/protocol negative control warp**:
   - Treat `dataset_id` as a pseudo-condition; fit the same warp model.
@@ -308,6 +327,7 @@ This subsection applies only when spatial transcriptomics data is available.
 - [ ] `reports/<run_id>/condition_schema_check.json` — schema validation + cross-table counts
 - [ ] `reports/<run_id>/qc_summary.html` — QC metrics and doublet rates per dataset
 - [ ] `reports/<run_id>/composition_confound.csv` — per-family permutation test results
+- [ ] `reports/<run_id>/nb_dispersion/` — per cell family: per-gene NB overdispersion parameter `r_gene` (stored as `.uns["nb_dispersion"]` in AnnData and as `r_gene_{cell_family}.csv` for portability). **v1 dependency** for σ_program propagation.
 - [ ] `reports/<run_id>/program_library.json` — curated program list with gene counts; NMF program names and top genes
 - [ ] `reports/<run_id>/orbital_fit_v{version}_{run_id}.json` + `orbital_weights_v{version}_{run_id}.npz` — fitted orbital parameters (all families). JSON header includes: model version, training dataset IDs, SEED, data checksums. (Replaces deprecated `orbital_fit.pkl`.)
 - [ ] `reports/<run_id>/anchoring_check.csv` — fraction of healthy cells inside orbitals per family
@@ -326,4 +346,4 @@ This subsection applies only when spatial transcriptomics data is available.
 
 ---
 
-*Version: v0.6 — last updated 2026-04-14. Key changes from v0.5: §I spatial validation rewritten as structure-only, state-agnostic checks (Kruskal-Wallis spatial gradient, Moran's I per discovered state, rim distance correlation as observation not requirement, warp directionality validation by program scores not named states, post-hoc annotation step added explicitly after validation).*
+*Version: v0.7 — last updated 2026-04-15. Key changes from v0.6: LOSO asymmetry note added (§J); r_gene storage specified (§C, §K) as v1 dependency; interaction DOF warning added (§H); cell-type cross-dataset mapping table added (§E); PCA elbow criterion formalized (§F4, kneedle algorithm); clustering algorithm specified (§G1b, k-means + gap statistic); partner validation protocol added to pipeline note.*

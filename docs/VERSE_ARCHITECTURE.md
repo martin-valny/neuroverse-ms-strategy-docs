@@ -22,7 +22,7 @@ Healthy tissue (fixed reference)
 ```
 
 ### Warp factorization
-The total warp for any sample is a linear combination of orthogonal condition components. For MS:
+The total warp for any sample is a linear combination of **separable condition components** (factorized, not necessarily orthogonal — the model attempts to separate these axes where data permit; see VIF collapse protocol in §6 for when separation fails). For MS:
 - **w_spatial**: compartment effect (NAWM / rim / core), shared across lesion activity states
 - **w_activity**: lesion activity effect (chronic-active vs inactive), shared across spatial positions
 - **w_interaction**: spatial × activity interaction (e.g., chronic-active rim has a foamy-microglia/CD8-T niche not seen in inactive rim)
@@ -298,6 +298,8 @@ center_condition = center_healthy
 ### Interaction sparsity rule
 Fit w_interaction only if ≥ 3 donors exist per condition cell (each spatial × activity combination). Otherwise drop the interaction term and log all skipped cells.
 
+**Degrees of freedom note**: the full factorized model (intercept + 2 spatial + 1 activity + up to 6 interactions + 1 dataset + 2–3 covariates) has ~13–15 parameters. With N≈20 pseudobulk groups per family, this is on the edge of overfitting even with L2 regularization. In practice, the ≥3 donors rule will skip most interaction terms for v0 datasets, reducing the effective model to main effects only (spatial + activity + dataset + covariates, ~7–8 parameters). **Interaction analysis requires larger cohorts or partner data enrichment.**
+
 ### L2 regularization and nested cross-validation
 Warp fitting minimizes:
 ```
@@ -499,4 +501,4 @@ Stepping t from 0 → 1 visualizes the "path" between sample A's ecosystem state
 
 ---
 
-*Version: v0.5 — last updated 2026-04-13. Key changes from v0.4: PROGENy added to curated library (14 programs → total ~195); σ_program delta method formula specified (v1 concrete spec); CNS cell-state signatures planned for v1; Bhattacharyya orbital overlap check added with formula; orbital scaling warp (scale_ratio) made a first-class v0 output; inter-orbital coupling documented as v2+ with design intent; [MISSING] token and masked cell type prediction pre-training added to Layer 6 spec; contrastive learning objectives (supervised + trajectory) specified in Layer 7; biomarker discovery interface specified in §10 (v1+); warp interpolation added to §13 sample imprint section; FUTURE_VERSIONS_ROADMAP.md created for all v1/v2+ items.*
+*Version: v0.7 — last updated 2026-04-15. Key changes from v0.5: "orthogonal" → "separable" warp framing (§1) with explicit note that VIF < 10 ≠ orthogonality; interaction DOF warning added to §6 (most interaction terms expected to be skipped in v0); annotation guide usage constraint added (§5, post-hoc only). Prior v0.5 changes: PROGENy (~195 total); σ_program delta method; Bhattacharyya overlap; scale_ratio; inter-orbital coupling (v2+); [MISSING] token; contrastive learning; biomarker discovery (v1+); warp interpolation (§13).*

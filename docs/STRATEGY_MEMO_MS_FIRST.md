@@ -6,13 +6,13 @@ Prove that Verse can factor the **spatial** and **inflammatory** axes of CNS whi
 
 ## Why MS-First
 
-MS lesion pathology provides crisp, spatially grounded condition labels (core vs rim/edge vs NAWM) that are ideal for testing the Verse bending/warping hypothesis without needing longitudinal biopsies. Importantly, these spatial labels are **orthogonal** to a second biological axis — lesion activity (chronic-active vs inactive) — giving us a natural factorized design to demonstrate that Verse can resolve multiple condition axes simultaneously.
+MS lesion pathology provides crisp, spatially grounded condition labels (core vs rim/edge vs NAWM) that are ideal for testing the Verse bending/warping hypothesis without needing longitudinal biopsies. Importantly, these spatial labels are **approximately separable** from a second biological axis — lesion activity (chronic-active vs inactive) — giving us a natural factorized design to demonstrate that Verse can resolve multiple condition axes simultaneously. (Note: spatial and activity are correlated in practice — chronic-active lesions concentrate at rims. The model separates them where data permit; see VIF collapse protocol when they cannot be separated.)
 
 MS also has three complementary public datasets covering different biological angles, enabling rigorous cross-dataset validation.
 
 ## Architecture: Model vs Reporting Surface
 
-> The underlying Verse model factors lesion location (spatial axis) and lesion activity (activity axis) as **orthogonal warp axes**, with interaction terms where data support them. The U0/U1/U2 three-universe classification is a **v0 reporting abstraction** layered on this richer factorized model. Partners see the simplified classification; scientists see the full warp decomposition.
+> The underlying Verse model factors lesion location (spatial axis) and lesion activity (activity axis) as **separable warp axes**, with interaction terms where data support them. The U0/U1/U2 three-universe classification is a **v0 reporting abstraction** layered on this richer factorized model. Partners see the simplified classification; scientists see the full warp decomposition.
 
 **Reference chain:**
 ```
@@ -35,6 +35,8 @@ The factorized warp model supports **5 biologically meaningful universes**: NAWM
 | **GSE301908** (Immunity 2025) | **Chronic-active rim anchor + external validation** | snRNA-seq + MERFISH of chronic active MS lesions; defines the foamy-microglia / CD8+ T cell inflammatory niche at the rim (ABCA1/G1 axis) |
 
 **Cross-dataset strategy**: GSE180759 + Lerma-Martin used for training (with Harmony integration); GSE301908 held out as external validation. Rotate all three in leave-one-dataset-out evaluation. Target: structured overlap of top warp-driving programs across datasets — not exact identity (different protocols, donors, and regions will cause some divergence).
+
+**LOSO asymmetry note**: GSE301908 contains only chronic-active lesions — it has **no variance on the activity axis**. When GSE301908 is held out, LOSO validates spatial-axis warp only. Activity-axis validation relies exclusively on GSE180759 + Lerma-Martin folds. Report per-fold LOSO results annotated with this asymmetry.
 
 ## Cell Type Scope: All Families, Microglia as Primary Readout
 
@@ -74,7 +76,7 @@ The foamy/ABCA1-low state and its spatial co-localization with CD8+ Trm T cells 
 
 1. **Spatial hypothesis**: Cell-type/state orbitals shift progressively from healthy → NAWM → rim → core, and this spatial warp is reproducible across donors and datasets.
 2. **Activity hypothesis**: Chronic-active and chronic-inactive lesions at the same spatial compartment have different orbital shifts (especially at the rim), driven by distinct programs (IFN + lipid in active; iron + scar in inactive).
-3. **Factorizability**: The spatial and activity warps are approximately orthogonal and can be separated in the design matrix, enabling independent interpretation.
+3. **Factorizability**: The spatial and activity warps are approximately separable and can be estimated jointly in the design matrix (VIF < 10), enabling independent interpretation. If VIF > 10, the model collapses to a single lesion-stage warp — factorizability is testable, not assumed.
 4. **Mechanism** *(falsifiable prediction)*: Based on prior MS literature, the top warp-driving programs at the rim are expected to include IFN-response and/or lipid/sterol metabolism pathways; the top programs at the core are expected to include scar-associated gliosis and myelin loss programs. This is a **falsifiable prediction, not a validation target** — if iron-metabolism, complement, or other programs dominate instead, that is the actual finding. Report top programs by effect size first; compare to this prediction post-hoc.
 
 ## v0 Outputs (Sellable Artifacts)
@@ -110,7 +112,7 @@ iPSC microglia lack yolk-sac lineage developmental imprinting and differ metabol
 
 ## Evaluation Suite (Non-Negotiable)
 
-1. **Leave-one-donor-out (LODO)**: learn orbitals + warps on N-1 donors, apply to held-out donor. Warp direction vectors (Spearman ρ ≥ 0.7) and key programs must persist. Evaluate per cell family.
+1. **Leave-one-donor-out (LODO)**: learn orbitals + warps on N-1 donors, apply to held-out donor. Warp direction vectors (Spearman ρ ≥ 0.65, aspirational; realistic range 0.50–0.65 with N≈20) and key programs must persist. Evaluate per cell family.
 2. **Leave-one-dataset-out (LOSO)**: train on 2 datasets, test on the 3rd (rotate). Expected: top-10 warp-driving programs Jaccard ≥ 0.5 in ≥ 2 of 3 folds. **LOSO with 3 datasets is a qualitative sanity check, not a statistical test** — 3 folds cannot support generalization claims. Report all 3 Jaccard values individually.
 3. **Negative control warps**: treat `dataset_id/protocol` as a pseudo-condition; show that dataset warp magnitude < 50% of biological warp magnitude.
 4. **Anchoring check**: ≥ 80% of healthy-reference cells inside reference orbitals at 99% confidence, per family.
@@ -161,4 +163,4 @@ The following datasets were explicitly considered and decided against for v0. Re
 
 ---
 
-*Version: v0.5 — last updated 2026-04-14. Key changes from v0.4: "Microglia Sub-State Detail" renamed to "Microglia State Annotation Reference (Post-Discovery Labels)"; "Expected location" column replaced with "Literature-reported location (reference only)" + usage constraint note; Core Scientific Hypothesis 4 reframed as falsifiable prediction not a validation target.*
+*Version: v0.6 — last updated 2026-04-15. Key changes from v0.5: LODO ρ target corrected to ≥0.65 aspirational in evaluation table; LOSO asymmetry note added (GSE301908 = chronic-active only); "orthogonal" → "separable" throughout; factorizability hypothesis reframed as testable (VIF-dependent).*
