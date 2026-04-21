@@ -89,7 +89,29 @@ Every pseudobulk row must contain these columns:
   - neuron: 30 cells
 
   Groups below the threshold receive `MISSING` flag and zero confidence. Document removal rate per cell family per dataset. **T cell warp analysis is best-effort**: report only if ≥ 5 donors have ≥ 20 T cells per compartment; otherwise report cell counts and exclude from warp analysis.
-- [ ] Compute NB variance + DESeq2-style dispersion shrinkage per gene. Store per-gene overdispersion parameter `r_gene` in `.uns["nb_dispersion"]` (per cell family). **v1 dependency**: σ_program propagation (delta method) requires `r_gene` — verify this artifact is present in v0 outputs before v1 development begins. (Ref: `VERSE_ARCHITECTURE.md`, Layer 1; `FUTURE_VERSIONS_ROADMAP.md` §v1.)
+- [ ] Compute NB variance + DESeq2-style dispersion shrinkage per gene — estimated per **(cell_family, dataset_id)** using ALL cells of that family × dataset (not per pseudobulk group — severely underdetermined at n=50). Store as `.uns["nb_dispersion"][cell_family][dataset_id]` → array shape (n_genes,), same gene order as `.var`. **v1 dependency**: σ_program propagation (delta method) requires `r_gene` — verify this artifact is present in v0 outputs before v1 development begins.
+- [ ] **Gene filter (before pseudobulk construction)**: from the full combined single-cell matrix (all families pooled), compute per-gene detection rate (fraction of cells with raw count > 0). Retain genes with global detection rate ≥ 5%. Apply the SAME retained gene list uniformly to all families and all pseudobulk groups. Record in `.uns["pseudobulk_metadata"]["gene_filter"]`. Log: total genes before/after, fraction retained. Flag genes with per-family detection rate < 10% as `low_confidence_family = True` in `.var`.
+- [ ] **Normalization layers**: after aggregation, compute and store:
+  - `.layers["counts"]`: int32, raw summed UMI counts per group × gene
+  - `.X` (= `.layers["mu"]`): float32, pseudobulk mean µ = counts / n_cells
+  - `.layers["nb_variance"]`: float32, σ²_gene = µ + µ²/r_gene per group × gene — **the probabilistic component**. Requires r_gene from `.uns["nb_dispersion"]`. Stored as v1 dependency; used in v0 for confidence score computation only.
+  - `.layers["cpm"]`: float32, counts-per-million (counts / sum(counts_per_group) × 1e6) — input for ssGSEA
+  - `.layers["log1p_cpm"]`: float32, log1p(cpm) — NMF input and visualization
+  - `.layers["detection_rate"]`: float32, π_g = fraction of cells in group with raw count > 0
+- [ ] **Pseudobulk ID**: assign `pseudobulk_id = f"{dataset_id}__{donor_id}__{cell_family}__{spatial_label}"` (all lowercased, `__` separator). Store in `.obs["pseudobulk_id"]` and set as `.obs_names`. Validate all IDs unique (raise error if duplicates). Confirm no component value contains `__`.
+- [ ] **Confidence score**: compute per group:
+  ```
+  count_factor = clip(n_cells / 150, 0.0, 1.0)
+  disp_factor  = 1.0 / (1.0 + mean_gene(1/µ_g + 1/r_gene))
+  confidence   = count_factor × disp_factor   # hard 0 if n_cells < min_cells threshold
+  ```
+  Store in `.obs["confidence"]`. Verify range [0, 1]. Log distribution per cell family.
+- [ ] **Spatial label resolution metadata**: record in `.uns["pseudobulk_metadata"]["spatial_label_resolution"]` per dataset:
+  - `"sample_level"`: GSE180759, GSE301908, Lerma-Martin snRNA-seq
+  - `"spot_level"`: Lerma-Martin spatial transcriptomics (Visium spots only)
+  Downstream §I spatial validation must check this field — Moran's I and continuous spatial statistics are valid ONLY for `"spot_level"` datasets.
+- [ ] **Complete .obs schema**: confirm all required columns present: `pseudobulk_id, donor_id, dataset_id, cell_family, spatial_label, activity_label, reference_flag, n_cells, confidence, missing_flag, sex, disease_duration_years, protocol`. Missing values: NaN for healthy donors (no disease metadata).
+- [ ] **Detection rate program flag** (§F dependency): after program scoring, for each (program × pseudobulk group), compute mean π across that program's gene set using `.layers["detection_rate"]`. Flag as `low_detection = True` in program score output if mean π < 0.1. Do not exclude — flag for cautious interpretation.
 - [ ] **Composition confound check**: for each cell family, run a permutation test of cell-type proportion (fraction of all cells) against `dataset_id`, `spatial_label`, and `activity_label`. Flag families where proportion is significantly predicted by `dataset_id` (p < 0.05, permutation). These families require careful interpretation in warp analysis.
 
 ---
@@ -334,10 +356,12 @@ This subsection applies only when spatial transcriptomics data is available.
 
 ## K) Output Artifacts (Pilot-Ready)
 
+- [ ] `reports/<run_id>/pseudobulk_anndata.h5ad` — complete pseudobulk AnnData with all layers (counts, mu, nb_variance, cpm, log1p_cpm, detection_rate), `.obs` (full schema including pseudobulk_id, confidence, missing_flag), `.var` (gene_filter, low_confidence_family flags), `.uns` (nb_dispersion nested dict, program_scores, pseudobulk_metadata). **Primary Layer 1 output artifact — input to all downstream steps.**
+- [ ] `reports/<run_id>/gene_filter_report.csv` — per gene: global_detection_rate, per-family detection rates, retained (bool), low_confidence_family flags per family. Transparency artifact for the gene filtering step.
 - [ ] `reports/<run_id>/condition_schema_check.json` — schema validation + cross-table counts
 - [ ] `reports/<run_id>/qc_summary.html` — QC metrics and doublet rates per dataset
 - [ ] `reports/<run_id>/composition_confound.csv` — per-family permutation test results
-- [ ] `reports/<run_id>/nb_dispersion/` — per cell family: per-gene NB overdispersion parameter `r_gene` (stored as `.uns["nb_dispersion"]` in AnnData and as `r_gene_{cell_family}.csv` for portability). **v1 dependency** for σ_program propagation.
+- [ ] `reports/<run_id>/nb_dispersion/` — per (cell_family, dataset_id): per-gene NB overdispersion parameter `r_gene` (stored as `.uns["nb_dispersion"][cell_family][dataset_id]` in AnnData and as `r_gene_{cell_family}_{dataset_id}.csv` for portability). **v1 dependency** for σ_program propagation.
 - [ ] `reports/<run_id>/program_library.json` — curated program list with gene counts; NMF program names and top genes
 - [ ] `reports/<run_id>/orbital_fit_v{version}_{run_id}.json` + `orbital_weights_v{version}_{run_id}.npz` — fitted orbital parameters (all families). JSON header includes: model version, training dataset IDs, SEED, data checksums. (Replaces deprecated `orbital_fit.pkl`.)
 - [ ] `reports/<run_id>/anchoring_check.csv` — fraction of healthy cells inside orbitals per family
@@ -356,4 +380,4 @@ This subsection applies only when spatial transcriptomics data is available.
 
 ---
 
-*Version: v0.8 — last updated 2026-04-14. Key changes from v0.7: covariance regularization checkbox added (§G1); pre-fit axis viability check added (§G1 + §H reference); LODO ρ full distribution reporting added (§J, flag ρ < 0 folds, report SD). Prior v0.7 changes: LOSO asymmetry note (§J); r_gene storage (§C, §K); interaction DOF warning (§H); cell-type mapping table (§E); PCA elbow formalized (§F4); clustering algorithm (§G1b); partner validation protocol.*
+*Version: v0.9 — last updated 2026-04-21. Key changes from v0.8: pseudobulk construction spec added (§C) — gene filter checkbox (≥5% global detection rate), normalization layers (counts/mu/nb_variance/cpm/log1p_cpm/detection_rate), pseudobulk_id naming, confidence score formula, spatial label resolution metadata, complete .obs schema, detection rate program flag (§F dependency); r_gene scope updated to per (family,dataset); two new §K artifacts (pseudobulk_anndata.h5ad, gene_filter_report.csv). Prior v0.8 changes: covariance regularization (§G1); axis viability check (§G1+§H); LODO ρ distribution (§J).*

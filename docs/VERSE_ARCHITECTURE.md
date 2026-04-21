@@ -73,7 +73,12 @@ Single-cell/nucleus RNA-seq has gene-specific overdispersion that simple Poisson
 
 where **r_gene** is a gene-specific overdispersion parameter. Apply **DESeq2-style empirical Bayes dispersion shrinkage** to stabilize estimates for lowly expressed or sparse genes by sharing information across genes of similar expression level.
 
-Confidence is then a function of both n and gene-specific overdispersion — not just sampling depth.
+**Confidence score formula**:
+```
+confidence(g) = clip(n_cells(g) / 150, 0.0, 1.0)
+              × (1 / (1 + mean_gene(1/µ_g + 1/r_gene)))
+```
+Groups with n_cells < min_cells receive confidence = 0 unconditionally (hard floor). The first factor (count ramp) saturates at 1.0 for groups ≥ 150 cells. The second factor (NB dispersion term) captures how reliably per-gene means are estimated — groups dominated by low-µ, high-overdispersion genes receive lower confidence even at adequate cell count. In practice the dispersion term is close to 1.0 for most groups; the primary driver of confidence variation is n_cells/150.
 
 ### Hard threshold
 - **min_cells = 50** (default): groups with fewer cells are excluded and receive a **MISSING** flag with **zero confidence**.
@@ -88,6 +93,93 @@ Confidence is then a function of both n and gene-specific overdispersion — not
 
   T cells in white matter are sparse — often 50–200 cells per donor across the entire tissue. Aggregated at donor × T_cell × spatial_label, most groups will not reach 50 cells. A lower threshold (20) is used with proportionally lower confidence scores. T cell warp analysis is **best-effort**: report only if ≥ 5 donors have ≥ 20 T cells per compartment; otherwise report cell counts only and exclude from warp analysis.
 - Groups with cells between min_cells and 150 are included but down-weighted proportionally by their confidence score.
+
+### What "probabilistic pseudobulk" means — v0 vs v1
+Standard pseudobulk (Muscat, DESeq2 pb) represents each group as a single point: a summed count vector. Probabilistic pseudobulk represents each group as a **distribution per gene**: mean µ_gene ± variance σ²_gene (NB model). This distinction matters for orbital fitting and novelty scoring.
+
+Per-group per-gene representation:
+```
+µ_gene(g)  = sum_counts(g) / n_cells(g)         ← point estimate of mean
+σ²_gene(g) = µ_gene(g) + µ_gene(g)² / r_gene   ← NB variance (overdispersion)
+```
+
+Stored as:
+- `.X` / `.layers["mu"]` — µ_gene per group (used for program scoring, PCA)
+- `.layers["nb_variance"]` — σ²_gene per group (**the probabilistic component**)
+
+**v0 behaviour (partial propagation)**:
+- Program scoring uses µ only (UCell/ssGSEA on `.X`) — σ²_gene is NOT propagated through program scores in v0. This is a known limitation.
+- Orbital fitting uses µ projected to PCA space. Orbital covariance is estimated from **between-group variance** of healthy µ vectors (variance across donors). Within-group σ²_gene is NOT added to orbital covariance in v0.
+- Confidence score encodes σ²_gene (via the NB dispersion term) and gates which groups participate in fitting — this is the primary v0 use of σ²_gene.
+- `.layers["nb_variance"]` is stored as a v1 dependency artifact.
+
+**v1 behaviour (full propagation)**:
+- σ_program propagated via delta method: σ²_program = Σ_g w²_g · σ²_gene_g
+- Orbital covariance augmented: Σ_orbital = Σ_between_donors + mean(Σ_within_groups)
+- Novelty score accounts for both orbital uncertainty and sample uncertainty.
+
+**Implication for v0**: the orbital boundary is tighter than the true biological distribution because within-group uncertainty is not propagated. This is partially compensated by the covariance regularization (Σ_reg = diag(max(σ²_j, ε)), §5).
+
+### NB dispersion estimation scope
+r_gene is estimated per **(cell_family, dataset_id) combination** — NOT per pseudobulk group. Fitting NB dispersion on n=50 cells × 20,000 genes is severely underdetermined (maximum likelihood estimates hit boundary values). Using all cells of a family within a dataset (typically 5,000–50,000 cells) provides adequate sample size for DESeq2-style mean-dispersion trend fitting.
+
+r_gene captures biological overdispersion in a cell type — how much cell-to-cell variation exists beyond Poisson noise for a given gene. This is a family-level property independent of spatial compartment: homeostatic P2RY12 in microglia has approximately the same overdispersion in NAWM and rim — the foamy state changes the mean, not the count process.
+
+**Storage**: `.uns["nb_dispersion"][cell_family][dataset_id]` → array shape (n_genes,), indexed in the same gene order as `.var`.
+
+### Normalization and layer structure
+Raw counts are **summed per group** (no per-cell normalization before aggregation). The NB dispersion model expects raw count sums — pre-normalizing before aggregation conflates biological and technical variability and distorts the likelihood.
+
+Per pseudobulk group, compute and store:
+
+| Layer | dtype | Description |
+|-------|-------|-------------|
+| `.layers["counts"]` | int32 | Sum of raw UMI counts per gene per group |
+| `.X` (= `.layers["mu"]`) | float32 | Pseudobulk mean µ = counts / n_cells — primary slot for program scoring and PCA |
+| `.layers["nb_variance"]` | float32 | σ²_gene = µ + µ²/r_gene — **the probabilistic component**; v1 dependency for delta method σ_program and orbital covariance augmentation |
+| `.layers["cpm"]` | float32 | Counts-per-million per group (counts / sum × 1e6) — input for ssGSEA |
+| `.layers["log1p_cpm"]` | float32 | log1p(cpm) — used for NMF input and visualization |
+| `.layers["detection_rate"]` | float32 | π_g = fraction of cells in group with raw count > 0 — diagnostic covariate for program scoring |
+
+**Tool routing**:
+- UCell → `.X` (rank-based, normalization-agnostic)
+- ssGSEA → `.layers["cpm"]`
+- NMF → `.layers["log1p_cpm"]`
+- NB dispersion fitting → `.layers["counts"]`
+- Confidence score → `.X` (µ) + `.uns["nb_dispersion"]` (r_gene)
+- Orbital fitting (v0) → `.X` projected to PCA space (µ only)
+- Orbital fitting (v1) → `.X` + `.layers["nb_variance"]` (µ + σ²)
+
+Do NOT log-transform counts before NB dispersion fitting.
+
+### Gene filtering (applied before pseudobulk construction)
+From the full combined single-cell matrix (all families, all datasets), compute per-gene global detection rate (fraction of cells with raw count > 0).
+
+**Hard filter**: retain genes detected in ≥ 5% of cells globally. This removes genes unexpressed in the data while preserving cell-state-specific markers (e.g., ABCA1 in foamy microglia, ITGAE in CD8+ Trm) that are lowly expressed in healthy tissue but biologically critical in disease states.
+
+Apply the same gene list **uniformly to ALL families and ALL pseudobulk groups**. Per-group or per-family gene filtering would produce ragged gene sets, breaking shared program scoring. Record retained gene list in `.uns["pseudobulk_metadata"]["gene_filter"]`.
+
+**Soft flag**: mark genes detected in < 10% of cells within a specific cell family as `low_confidence_family = True` in `.var`. These genes are retained but flagged; program scores that rely on low-confidence genes in a given family are annotated as `low_detection` in the program score output.
+
+### Pseudobulk ID
+Each group is identified by a deterministic string key:
+```
+pseudobulk_id = f"{dataset_id}__{donor_id}__{cell_family}__{spatial_label}"
+```
+(all components lowercased; `__` double-underscore separator)
+
+Example: `gse180759__donor_04__microglia__rim`
+
+This key is unique within the pseudobulk AnnData and is the join key for all downstream outputs (program scores, warp vectors, orbital membership, LODO results). Schema validator must confirm uniqueness and reject component values containing `__`.
+
+### Spatial label precision ceiling (v0 limitation)
+In all three v0 snRNA-seq datasets, `spatial_label` is assigned at the **tissue-section / dissection level**. All cells in a dissected block share the same spatial_label — it is a sample-level label, NOT a cell-level coordinate. True cell-level spatial coordinates (continuous, within-tissue) are available only in the Lerma-Martin spatial transcriptomics component (Visium spots).
+
+Spatial gradient analyses requiring continuous coordinates (Moran's I spatial autocorrelation, rim-distance correlation with continuous position) are valid ONLY for the Lerma-Martin spatial component. Cross-compartment comparisons in snRNA-seq reflect between-dissection-block differences, not within-tissue gradients.
+
+Record in `.uns["pseudobulk_metadata"]["spatial_label_resolution"]` per dataset:
+- `"sample_level"`: GSE180759, GSE301908, Lerma-Martin snRNA-seq
+- `"spot_level"`: Lerma-Martin spatial transcriptomics (Visium spots)
 
 ### Why pseudobulk
 Respects donor/replicate structure (prevents pseudoreplication), captures biological heterogeneity, and propagates uncertainty downstream to programs, orbitals, and warp fitting.
@@ -530,4 +622,4 @@ Stepping t from 0 → 1 visualizes the "path" between sample A's ecosystem state
 
 ---
 
-*Version: v0.8 — last updated 2026-04-14. Key changes from v0.7: covariance regularization subsection added (§5, Σ_reg = diag(max(σ²_j, ε)) formula); pre-fit axis viability check added (§6, drop axis if < 5 distinct donors). Prior v0.7 changes: "orthogonal" → "separable" warp framing (§1); interaction DOF warning (§6); annotation guide usage constraint (§5, post-hoc only). Prior v0.5 changes: PROGENy (~195 total); σ_program delta method; Bhattacharyya overlap; scale_ratio; inter-orbital coupling (v2+); [MISSING] token; contrastive learning; biomarker discovery (v1+); warp interpolation (§13).*
+*Version: v0.9 — last updated 2026-04-21. Key changes from v0.8: full probabilistic pseudobulk spec added to §3 — "probabilistic" v0 vs v1 distinction; confidence score formula; NB dispersion scope (per family×dataset); normalization layer table (.layers["counts/mu/nb_variance/cpm/log1p_cpm/detection_rate"]); gene filtering (≥5% global detection); pseudobulk_id naming convention; spatial label precision ceiling (sample_level vs spot_level). Prior v0.8 changes: covariance regularization (§5); pre-fit axis viability check (§6).*
